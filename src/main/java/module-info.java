@@ -10,6 +10,8 @@ module org.solo.manager_ktpp {
     requires org.kordamp.bootstrapfx.core;
     requires eu.hansolo.tilesfx;
     requires com.almasb.fxgl.all;
+    requires org.apache.poi.poi;
+    requires org.apache.poi.ooxml;
 
     opens org.solo.manager_ktpp to javafx.fxml;
     exports org.solo.manager_ktpp;
