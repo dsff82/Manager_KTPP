@@ -5,12 +5,15 @@
 <?import javafx.scene.layout.VBox?>
 
 <?import javafx.scene.control.Button?>
-<VBox alignment="CENTER" spacing="20.0" xmlns:fx="http://javafx.com/fxml"
-      fx:controller="org.solo.manager_ktpp.HelloController">
-    <padding>
-        <Insets bottom="20.0" left="20.0" right="20.0" top="20.0"/>
-    </padding>
-
-    <Label fx:id="welcomeText"/>
-    <Button text="Hello!" onAction="#onHelloButtonClick"/>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.control.TreeView?>
+<VBox xmlns:fx="http://javafx.com/fxml"
+      fx:controller="org.solo.manager_ktpp.ExcelTreeController"
+      spacing="8" alignment="CENTER">
+    <Label fx:id="welcomeText" text="Выберите Excel-файл"/>
+    <HBox>
+        <Button text="Открыть Excel" onAction="#onOpenExcel"/>
+    </HBox>
+    <TreeView fx:id="treeView" prefHeight="600" prefWidth="800"/>
 </VBox>
+
