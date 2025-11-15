@@ -9,22 +9,22 @@ public class Operation {
     private double normTime;
     private Department department;
 
-    // Для ТМЦ-проектов – какая операция потребляет
-    private OperationType consumedBy;
+    // Новое поле: для связки ТМЦ с операциями "что потребляется"
+    private String consumes; // строковое значение из Excel
 
-    public Operation(OperationType type, double normTime, Department dept) {
+    public Operation(OperationType type, double normTime, Department department) {
         this.type = type;
         this.normTime = normTime;
-        this.department = dept;
+        this.department = department;
     }
 
     public OperationType getType() { return type; }
     public double getNormTime() { return normTime; }
-    public Department getDepartment() { return department; }
+    public Department getDept() { return department; }
 
-    public OperationType getConsumedBy() { return consumedBy; }
-    public void setConsumedBy(OperationType consumedBy) {
-        this.consumedBy = consumedBy;
+    public String getConsumes() { return consumes; }
+    public void setConsumes(String consumes) {
+        this.consumes = consumes;
     }
 
     @Override

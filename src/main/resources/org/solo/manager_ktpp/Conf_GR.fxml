@@ -1,19 +1,75 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <?import javafx.geometry.Insets?>
-<?import javafx.scene.control.Label?>
-<?import javafx.scene.layout.VBox?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
 
-<?import javafx.scene.control.Button?>
-<?import javafx.scene.layout.HBox?>
-<?import javafx.scene.control.TreeView?>
 <VBox xmlns:fx="http://javafx.com/fxml"
       fx:controller="org.solo.manager_ktpp.ExcelTreeController"
-      spacing="8" alignment="CENTER">
-    <Label fx:id="welcomeText" text="Выберите Excel-файл"/>
-    <HBox>
-        <Button text="Открыть Excel" onAction="#onOpenExcel"/>
-    </HBox>
-    <TreeView fx:id="treeView" prefHeight="600" prefWidth="800"/>
-</VBox>
+      spacing="10" fillWidth="true">
 
+    <!-- Заголовок -->
+    <HBox alignment="CENTER_LEFT" spacing="10">
+        <padding><Insets top="10" right="10" bottom="10" left="10"/></padding>
+        <Label fx:id="welcomeText" text="Выберите Excel-файл"/>
+        <Button text="Открыть Excel" onAction="#onOpenExcel"/>
+        <Button text="Раскрыть всё" onAction="#onExpandAll"/>
+        <Button text="До листьев" onAction="#onExpandToLeaves"/>
+    </HBox>
+
+    <SplitPane dividerPositions="0.33,0.66">
+
+        <!-- Левая часть: дерево -->
+        <VBox spacing="6">
+            <padding><Insets top="8" right="8" bottom="8" left="8"/></padding>
+            <Label text="Структура" style="-fx-font-weight: bold;"/>
+            <TreeView fx:id="treeView" prefWidth="300" prefHeight="900"/>
+        </VBox>
+
+        <!-- Центр: таблица -->
+        <VBox spacing="6">
+            <padding><Insets top="8" right="8" bottom="8" left="8"/></padding>
+            <Label text="Таблица параметров" style="-fx-font-weight: bold;"/>
+
+            <TableView fx:id="table" prefHeight="900">
+                <columns>
+
+                    <TableColumn fx:id="colIcon" text="" prefWidth="40"/>
+
+                    <TableColumn fx:id="colType" text="Тип" prefWidth="120"/>
+                    <TableColumn fx:id="colName" text="Название" prefWidth="200"/>
+                    <TableColumn fx:id="colNorm" text="Норма" prefWidth="80"/>
+                    <TableColumn fx:id="colDept" text="Цех" prefWidth="90"/>
+                    <TableColumn fx:id="colConsumes" text="Потребляется" prefWidth="150"/>
+                </columns>
+            </TableView>
+        </VBox>
+
+        <!-- Правая часть: панель свойств -->
+        <VBox fx:id="propertyPane" spacing="6" style="-fx-background-color: #f7f7f7;">
+            <padding><Insets top="12" right="12" bottom="12" left="12"/></padding>
+            <Label text="Свойства" style="-fx-font-size: 16; -fx-font-weight: bold;"/>
+
+            <GridPane hgap="6" vgap="4">
+
+                <Label text="Тип:" GridPane.rowIndex="0" GridPane.columnIndex="0"/>
+                <Label fx:id="propType" GridPane.rowIndex="0" GridPane.columnIndex="1"/>
+
+                <Label text="Название:" GridPane.rowIndex="1" GridPane.columnIndex="0"/>
+                <Label fx:id="propName" GridPane.rowIndex="1" GridPane.columnIndex="1"/>
+
+                <Label text="Норма:" GridPane.rowIndex="2" GridPane.columnIndex="0"/>
+                <Label fx:id="propNorm" GridPane.rowIndex="2" GridPane.columnIndex="1"/>
+
+                <Label text="Цех:" GridPane.rowIndex="3" GridPane.columnIndex="0"/>
+                <Label fx:id="propDept" GridPane.rowIndex="3" GridPane.columnIndex="1"/>
+
+                <Label text="Потребляется:" GridPane.rowIndex="4" GridPane.columnIndex="0"/>
+                <Label fx:id="propConsumes" GridPane.rowIndex="4" GridPane.columnIndex="1"/>
+
+            </GridPane>
+
+        </VBox>
+
+    </SplitPane>
+</VBox>

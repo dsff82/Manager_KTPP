@@ -26,6 +26,6 @@ public class Process {
 
     @Override
     public String toString() {
-        return name;
+        return name + " (" + type + ")";
     }
 }
