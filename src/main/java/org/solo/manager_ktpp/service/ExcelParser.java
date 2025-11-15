@@ -14,7 +14,9 @@ public class ExcelParser {
 
     private static final List<String> LOG = new ArrayList<>();
 
-    public static List<String> getLog() { return LOG; }
+    public static List<String> getLog() {
+        return LOG;
+    }
 
     private static void log(String msg) {
         System.out.println(msg);
@@ -40,190 +42,155 @@ public class ExcelParser {
 
         for (Row row : sheet) {
 
-            if (row.getRowNum() <= 3) continue;
+            if (row.getRowNum() <= 3) continue; // заголовки
 
             String levelStr = getStringCell(row, 0);
-            String name     = getStringCell(row, 1);
-            String deptKD   = getStringCell(row, 2);
+            String name = getStringCell(row, 1);
 
-            double kdNorm   = getNumericCell(row, 3);
-            double tdNorm   = getNumericCell(row, 4);
-            double buyNorm  = getNumericCell(row, 5);
+            if (name.isEmpty() || levelStr.isEmpty()) {
+                continue;
+            }
+
+            String deptKD = getStringCell(row, 2);
+
+            double kdNorm = getNumericCell(row, 3);
+            double tdNorm = getNumericCell(row, 4);
+            double buyNorm = getNumericCell(row, 5);
             double prodNorm = getNumericCell(row, 6);
 
-            if (name.isEmpty() || levelStr.isEmpty()) continue;
-
-            log("---- Строка " + row.getRowNum() + " -------------------");
-            log("Уровень = " + levelStr + ", имя = " + name);
+            // Бывают строки "Итого" — пропускаем
+            if (name.toLowerCase().contains("итог")) continue;
 
             boolean hasKD = kdNorm > 0;
             boolean hasTD = tdNorm > 0;
             boolean hasKTPP = hasKD || hasTD;
 
+            log("---- Строка " + row.getRowNum() + " --------------------");
+            log("Уровень = " + levelStr + ", имя = " + name);
+
             Part part = new Part(name, hasKTPP);
 
-            // восстановление иерархии
+            // ================= ИЕРАРХИЯ ======================================
             String[] levels = levelStr.split("\\.");
-            String path = "";
+            String fullPath = String.join(".", levels);
 
-            for (int i = 0; i < levels.length; i++) {
-                path = (i == 0) ? levels[0] : path + "." + levels[i];
+            String parentPath = (levels.length == 1)
+                    ? "ROOT"
+                    : fullPath.substring(0, fullPath.lastIndexOf("."));
 
-                if (!levelMap.containsKey(path)) {
-                    if (i == 0) {
-                        root.addChild(part);
-                        log("Добавлен в root: " + name);
-                    } else {
-                        String parentPath = path.substring(0, path.lastIndexOf("."));
-                        Part parent = levelMap.get(parentPath);
+            Part parent = levelMap.getOrDefault(parentPath, root);
+            parent.addChild(part);
+            levelMap.put(fullPath, part);
 
-                        if (parent != null) {
-                            parent.addChild(part);
-                            log("Добавлен в " + parent.getName() + ": " + name);
-                        } else {
-                            log("ОШИБКА: нет родителя " + parentPath + " для " + name);
-                        }
-                    }
-                    levelMap.put(path, part);
-                }
-            }
+            log("Добавлен в: " + parent.getName() + " → " + name);
 
-            // ======================================================================
-            // 1) НОВАЯ ЛОГИКА: ПОКУПНАЯ ЧАСТЬ
-            // ======================================================================
+            // =================== ПОКУПНАЯ ЧАСТЬ =============================
             boolean isPokupnaya = (prodNorm <= 0) && (buyNorm > 0);
 
             if (isPokupnaya) {
-
-                log("→ Часть покупная: " + name);
-
-                // 1) процесс "Зак"
-                Process zak = new Process("Зак " + name, Process.ProcessType.ZAK);
-
-                Operation zakOp = new Operation(
-                        Operation.OperationType.ZAKUPKA,
-                        buyNorm,
-                        Operation.Department.UZ
-                );
-
-                zak.addOperation(zakOp);
-                part.addProcess(zak);
-
-                log("  Добавлен процесс Зак с операцией Zakupka(" + buyNorm + ")");
-
-                // 2) ТМЦ-П если есть КД или ТД
-                if (hasKD || hasTD) {
-
-                    log("  + КД/ТД → создаём ТМЦ-П");
-
-                    TmcProjectPart tmc = new TmcProjectPart("ТМЦ-П " + name, null);
-                    Process tmcProc = new Process("ТМЦ-П " + name, Process.ProcessType.TMC_P);
-
-                    if (hasKD) {
-                        log("    KD: " + kdNorm);
-                        tmcProc.addOperation(new Operation(
-                                Operation.OperationType.KD,
-                                kdNorm,
-                                parseDept(deptKD)
-                        ));
-                    }
-
-                    if (hasTD) {
-                        log("    TD: " + tdNorm);
-                        tmcProc.addOperation(new Operation(
-                                Operation.OperationType.TD,
-                                tdNorm,
-                                Operation.Department.OGT
-                        ));
-                    }
-
-                    tmc.addProcess(tmcProc);
-
-                    // привязка ТМЦ к закупке
-                    tmc.setConsumedBy(Operation.OperationType.ZAKUPKA);
-
-                    part.addChild(tmc);
-
-                    log("  ТМЦ-П привязан к Zakupka");
-                }
-
-                // покупная часть полностью обработана
+                createPurchaseLogic(part, name, kdNorm, tdNorm, buyNorm, deptKD, hasKD, hasTD);
                 continue;
             }
 
-            // ======================================================================
-            // 2) Обычная (не покупная) часть — создаём УТ
-            // ======================================================================
+            // =================== УТ ДЛЯ ПРОИЗВОДСТВА ========================
             if (buyNorm > 0 || prodNorm > 0) {
-
-                log("Создаём процесс УТ");
-
-                Process ut = new Process("УТ " + name, Process.ProcessType.UT);
-
-                if (buyNorm > 0) {
-                    ut.addOperation(new Operation(
-                            Operation.OperationType.ZAKUPKA,
-                            buyNorm,
-                            Operation.Department.UZ
-                    ));
-                    log("  ZAKUPKA: " + buyNorm);
-                }
-
-                if (prodNorm > 0) {
-                    ut.addOperation(new Operation(
-                            Operation.OperationType.PROIZVODSTVO,
-                            prodNorm,
-                            Operation.Department.TSEH
-                    ));
-                    log("  PROIZVODSTVO: " + prodNorm);
-                }
-
-                part.addProcess(ut);
+                createUTProcess(part, name, buyNorm, prodNorm);
             }
 
-            // ======================================================================
-            // 3) ТМЦ для обычной части
-            // ======================================================================
+            // =================== ТМЦ-П ДЛЯ ОТДЕЛОВ ==========================
             if (hasKTPP) {
-
-                log("Создаём ТМЦ-П");
-
-                TmcProjectPart tmc = new TmcProjectPart("ТМЦ-П " + name, null);
-                Process tmcProc = new Process("ТМЦ-П " + name, Process.ProcessType.TMC_P);
-
-                if (hasKD) {
-                    tmcProc.addOperation(new Operation(
-                            Operation.OperationType.KD,
-                            kdNorm,
-                            parseDept(deptKD)
-                    ));
-                    log("  KD: " + kdNorm);
-                }
-
-                if (hasTD) {
-                    tmcProc.addOperation(new Operation(
-                            Operation.OperationType.TD,
-                            tdNorm,
-                            Operation.Department.OGT
-                    ));
-                    log("  TD: " + tdNorm);
-                }
-
-                tmc.addProcess(tmcProc);
-
-                // ТМЦ обычной части привязывается к производству
-                if (prodNorm > 0) {
-                    tmc.setConsumedBy(Operation.OperationType.PROIZVODSTVO);
-                    part.addChild(tmc);
-                    log("  ТМЦ → ПРОИЗВОДСТВО");
-                }
+                createTmcLogic(part, name, kdNorm, tdNorm, deptKD, prodNorm > 0);
             }
         }
 
         wb.close();
         log("=== Парсинг завершён ===");
-
         return root;
+    }
+
+    // ======================================================================
+    private static void createPurchaseLogic(Part part, String name,
+                                            double kdNorm, double tdNorm,
+                                            double buyNorm, String deptKD,
+                                            boolean hasKD, boolean hasTD) {
+
+        log("→ Покупная часть: " + name);
+
+        Process zak = new Process("Зак " + name, Process.ProcessType.ZAK);
+        zak.addOperation(new Operation(
+                Operation.OperationType.ZAKUPKA,
+                buyNorm,
+                Operation.Department.UZ
+        ));
+
+        part.addProcess(zak);
+
+        if (hasKD || hasTD) {
+            createTmcLogic(part, name, kdNorm, tdNorm, deptKD, false);
+            log("  ТМЦ-П привязан к закупке");
+        }
+    }
+
+    private static void createUTProcess(Part part, String name,
+                                        double buyNorm, double prodNorm) {
+        log("Создаём процесс УТ");
+
+        Process ut = new Process("УТ " + name, Process.ProcessType.UT);
+
+        if (buyNorm > 0) {
+            ut.addOperation(new Operation(
+                    Operation.OperationType.ZAKUPKA,
+                    buyNorm,
+                    Operation.Department.UZ
+            ));
+        }
+
+        if (prodNorm > 0) {
+            ut.addOperation(new Operation(
+                    Operation.OperationType.PROIZVODSTVO,
+                    prodNorm,
+                    Operation.Department.TSEH // TODO: возможно из Excel
+            ));
+        }
+
+        part.addProcess(ut);
+    }
+
+    private static void createTmcLogic(Part part, String name,
+                                       double kdNorm, double tdNorm,
+                                       String deptKD,
+                                       boolean linkToProd) {
+
+        log("Создаём ТМЦ-П");
+
+        TmcProjectPart tmc = new TmcProjectPart("ТМЦ-П " + name, null);
+        Process tmcProc = new Process("ТМЦ-П " + name, Process.ProcessType.TMC_P);
+
+        if (kdNorm > 0) {
+            tmcProc.addOperation(new Operation(
+                    Operation.OperationType.KD,
+                    kdNorm,
+                    parseDept(deptKD)
+            ));
+        }
+
+        if (tdNorm > 0) {
+            tmcProc.addOperation(new Operation(
+                    Operation.OperationType.TD,
+                    tdNorm,
+                    Operation.Department.OGT
+            ));
+        }
+
+        tmc.addProcess(tmcProc);
+
+        if (linkToProd) {
+            tmc.setConsumedBy(Operation.OperationType.PROIZVODSTVO);
+        } else {
+            tmc.setConsumedBy(Operation.OperationType.ZAKUPKA);
+        }
+
+        part.addChild(tmc);
     }
 
     // ======================= UTILS =======================================
@@ -231,23 +198,18 @@ public class ExcelParser {
     private static String getStringCell(Row row, int col) {
         Cell c = row.getCell(col);
         if (c == null) return "";
-        return switch (c.getCellType()) {
-            case STRING -> c.getStringCellValue().trim();
-            case NUMERIC -> String.valueOf(c.getNumericCellValue());
-            default -> "";
-        };
+        return c.getCellType() == CellType.STRING
+                ? c.getStringCellValue().trim()
+                : String.valueOf(getNumericCell(row, col));
     }
 
     private static double getNumericCell(Row row, int col) {
-        Cell c = row.getCell(col);
-        if (c == null) return 0;
-
         try {
-            return switch (c.getCellType()) {
-                case NUMERIC -> c.getNumericCellValue();
-                case STRING -> parseDoubleSafe(c.getStringCellValue());
-                default -> 0;
-            };
+            Cell c = row.getCell(col);
+            if (c == null) return 0;
+            return c.getCellType() == CellType.NUMERIC
+                    ? c.getNumericCellValue()
+                    : parseDoubleSafe(c.getStringCellValue());
         } catch (Exception e) {
             return 0;
         }
@@ -255,8 +217,7 @@ public class ExcelParser {
 
     private static double parseDoubleSafe(String raw) {
         if (raw == null) return 0;
-        String cleaned = raw.replaceAll("[^0-9.]", "");
-        if (cleaned.isEmpty()) return 0;
+        String cleaned = raw.replaceAll("[^0-9.,]", "").replace(",", ".");
         try { return Double.parseDouble(cleaned); }
         catch (Exception e) { return 0; }
     }
@@ -265,7 +226,7 @@ public class ExcelParser {
         if (s == null) return Operation.Department.NONE;
         return switch (s.trim().toUpperCase()) {
             case "ОГТ" -> Operation.Department.OGT;
-            case "УЗ"  -> Operation.Department.UZ;
+            case "УЗ" -> Operation.Department.UZ;
             case "ЦЕХ" -> Operation.Department.TSEH;
             default -> Operation.Department.NONE;
         };
