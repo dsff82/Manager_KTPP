@@ -12,43 +12,50 @@ import java.util.*;
 
 public class ExcelParser {
 
+    /**
+     * Главный метод
+     */
     public static Part parseExcel(File file) throws IOException {
 
-        FileInputStream fis = new FileInputStream(file);
-        Workbook wb = new XSSFWorkbook(fis);
+        Workbook wb;
+        try (FileInputStream fis = new FileInputStream(file)) {
+            wb = new XSSFWorkbook(fis);
+        }
+
         Sheet sheet = wb.getSheetAt(0);
 
-        // Корневой Part
+        // Корень структуры
         Part root = new Part("Производственная структура", false);
 
-        // Для удобства восстановления иерархии
+        // Для восстановления дерева по уровням
         Map<String, Part> levelMap = new HashMap<>();
 
         for (Row row : sheet) {
 
-            if (row.getRowNum() <= 3) continue; // первые 4 строки – шапка
+            if (row.getRowNum() <= 3) continue; // 1–4 строки — шапка
 
-            // ---- Чтение ячеек ----
-            String levelStr = getCell(row, 0);
-            String name = getCell(row, 1);
-            String deptKD = getCell(row, 2);
+            String levelStr = getStringCell(row, 0);     // Код уровня
+            String name     = getStringCell(row, 1);     // Наименование
+            String deptKD   = getStringCell(row, 2);     // Подразделение КД
 
-            String kdStr = getCell(row, 3);
-            String tdStr = getCell(row, 4);
+            double kdNorm   = getNumericCell(row, 3);    // Норма КД
+            double tdNorm   = getNumericCell(row, 4);    // Норма ТД
 
-            String buyStr = getCell(row, 5);
-            String prodStr = getCell(row, 6);
+            double buyNorm  = getNumericCell(row, 5);    // Норма УТ — Закупка
+            double prodNorm = getNumericCell(row, 6);    // Норма УТ — Производство
 
-            if (name.isEmpty()) continue;
-            if (levelStr.isEmpty()) continue;
+            if (name.isEmpty() || levelStr.isEmpty()) continue;
 
-            // ---- Парсим уровень вложенности ----
-            int level = levelStr.split("\\.").length;
+            boolean hasKD = kdNorm > 0;
+            boolean hasTD = tdNorm > 0;
+            boolean hasKTPP = hasKD || hasTD;
 
-            boolean hasKTPP = (!kdStr.isEmpty() || !tdStr.isEmpty());
+            // Создаём Part
             Part part = new Part(name, hasKTPP);
 
-            // ---- Включаем в иерархию ----
+            // --- Встраиваем в иерархию по уровню ---
+            int level = levelStr.split("\\.").length;
+
             if (level == 1) {
                 root.addChild(part);
             } else {
@@ -59,136 +66,171 @@ public class ExcelParser {
 
             levelMap.put(levelStr, part);
 
-            // ---- ГЕНЕРАЦИЯ Укрупнённого маршрута ----
-            if (!buyStr.isEmpty() || !prodStr.isEmpty()) {
 
-                Process pr = new Process("УТ " + name, Process.ProcessType.UT);
+            // ======================================================================
+            //  1) Укрупнённый маршрут УТ
+            // ======================================================================
+            if (buyNorm > 0 || prodNorm > 0) {
 
-                // Закупка
-                if (!buyStr.isEmpty()) {
-                    Operation op = new Operation(
-                            Operation.OperationType.ZAKUPKA,
-                            Double.parseDouble(buyStr),
-                            Operation.Department.UZ
+                Process ut = new Process("УТ " + name, Process.ProcessType.UT);
+
+                if (buyNorm > 0) {
+                    ut.addOperation(
+                            new Operation(
+                                    Operation.OperationType.ZAKUPKA,
+                                    buyNorm,
+                                    Operation.Department.UZ
+                            )
                     );
-                    pr.addOperation(op);
                 }
 
-                // Производство
-                if (!prodStr.isEmpty()) {
-                    Operation op = new Operation(
-                            Operation.OperationType.PROIZVODSTVO,
-                            Double.parseDouble(prodStr),
-                            Operation.Department.TSEH
+                if (prodNorm > 0) {
+                    ut.addOperation(
+                            new Operation(
+                                    Operation.OperationType.PROIZVODSTVO,
+                                    prodNorm,
+                                    Operation.Department.TSEH
+                            )
                     );
-                    pr.addOperation(op);
-
-                    // Если есть КД/ТД → генерируем ТМЦ-проект
-                    if (hasKTPP) {
-                        TmcProjectPart tmc = new TmcProjectPart("ТМЦ-П " + name, Operation.OperationType.PROIZVODSTVO);
-
-                        Process tmcProc = new Process("ТМЦ-П " + name, Process.ProcessType.TMC_P);
-
-                        // КД
-                        if (!kdStr.isEmpty()) {
-                            Operation opKD = new Operation(
-                                    Operation.OperationType.KD,
-                                    Double.parseDouble(kdStr),
-                                    parseDept(deptKD)
-                            );
-                            tmcProc.addOperation(opKD);
-                        }
-
-                        // ТД
-                        if (!tdStr.isEmpty()) {
-                            Operation opTD = new Operation(
-                                    Operation.OperationType.TD,
-                                    Double.parseDouble(tdStr),
-                                    Operation.Department.OGT
-                            );
-                            tmcProc.addOperation(opTD);
-                        }
-
-                        tmc.addProcess(tmcProc);
-
-                        // Добавить ТМЦ-проект как ребенка операции Производство
-                        part.addChild(tmc);
-                    }
                 }
 
-                part.addProcess(pr);
+                part.addProcess(ut);
             }
 
-            // ---- Если нет производства, но есть закупка → техпроцесс Зак ----
-            if (!prodStr.isEmpty() == false && !buyStr.isEmpty()) {
 
-                Process zak = new Process("Зак " + name, Process.ProcessType.ZAK);
+            // ======================================================================
+            //  2) Процесс "Зак" если есть только закупка
+            // ======================================================================
+            if (buyNorm > 0 && prodNorm == 0) {
 
-                Operation op = new Operation(
-                        Operation.OperationType.ZAKUPKA,
-                        Double.parseDouble(buyStr),
-                        Operation.Department.UZ
+                Process zakPr = new Process("Зак " + name, Process.ProcessType.ZAK);
+
+                zakPr.addOperation(
+                        new Operation(
+                                Operation.OperationType.ZAKUPKA,
+                                buyNorm,
+                                Operation.Department.UZ
+                        )
                 );
-                zak.addOperation(op);
 
-                // ТМЦ-проект на закупку, если есть КД/ТД
-                if (hasKTPP) {
-                    TmcProjectPart tmc = new TmcProjectPart("ТМЦ-П " + name, Operation.OperationType.ZAKUPKA);
-                    Process tmcProc = new Process("ТМЦ-П " + name, Process.ProcessType.TMC_P);
+                part.addProcess(zakPr);
+            }
 
-                    if (!kdStr.isEmpty()) {
-                        tmcProc.addOperation(new Operation(
-                                Operation.OperationType.KD,
-                                Double.parseDouble(kdStr),
-                                parseDept(deptKD)
-                        ));
-                    }
-                    if (!tdStr.isEmpty()) {
-                        tmcProc.addOperation(new Operation(
-                                Operation.OperationType.TD,
-                                Double.parseDouble(tdStr),
-                                Operation.Department.OGT
-                        ));
-                    }
 
-                    tmc.addProcess(tmcProc);
-                    part.addChild(tmc);
+            // ======================================================================
+            //  3) Генерация ТМЦ-проектов (КД/ТД)
+            // ======================================================================
+            if (hasKTPP) {
+
+                TmcProjectPart tmc = new TmcProjectPart("ТМЦ-П " + name, null);
+
+                Process tmcProc = new Process("ТМЦ-П " + name, Process.ProcessType.TMC_P);
+
+                if (hasKD) {
+                    tmcProc.addOperation(
+                            new Operation(
+                                    Operation.OperationType.KD,
+                                    kdNorm,
+                                    parseDept(deptKD)
+                            )
+                    );
                 }
 
-                part.addProcess(zak);
+                if (hasTD) {
+                    tmcProc.addOperation(
+                            new Operation(
+                                    Operation.OperationType.TD,
+                                    tdNorm,
+                                    Operation.Department.OGT
+                            )
+                    );
+                }
+
+                tmc.addProcess(tmcProc);
+
+                // ***** ВАЖНО *****
+                // ТМЦ-проект навешиваем ТОЛЬКО на производство
+                if (prodNorm > 0) {
+                    tmc.setConsumedBy(Operation.OperationType.PROIZVODSTVO);
+                    part.addChild(tmc);
+                }
             }
 
         }
 
         wb.close();
-        fis.close();
         return root;
     }
 
-    // ---------------- UTIL ----------------------
 
-    private static String getCell(Row row, int col) {
-        Cell cell = row.getCell(col);
-        if (cell == null) return "";
-        return switch (cell.getCellType()) {
-            case STRING -> cell.getStringCellValue().trim();
-            case NUMERIC -> String.valueOf(cell.getNumericCellValue());
-            default -> "";
-        };
+    // =========================================================================
+    // ========================  UTILS  ========================================
+    // =========================================================================
+
+    /** Безопасное получение строки */
+    private static String getStringCell(Row row, int col) {
+        Cell c = row.getCell(col);
+        if (c == null) return "";
+
+        switch (c.getCellType()) {
+            case STRING:  return c.getStringCellValue().trim();
+            case NUMERIC: return String.valueOf(c.getNumericCellValue());
+            default:      return "";
+        }
+    }
+
+    /** Чистый безопасный numeric: извлекает число даже если там мусор типа "400 мин" */
+    private static double getNumericCell(Row row, int col) {
+        Cell c = row.getCell(col);
+        if (c == null) return 0;
+
+        try {
+            switch (c.getCellType()) {
+                case NUMERIC:
+                    return c.getNumericCellValue();
+
+                case STRING:
+                    return parseDoubleSafe(c.getStringCellValue());
+
+                case FORMULA:
+                    try {
+                        return c.getNumericCellValue();
+                    } catch (Exception ex) {
+                        return parseDoubleSafe(c.getStringCellValue());
+                    }
+
+                default:
+                    return 0;
+            }
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
+    /** Парсер удаляет всё, кроме цифр и точки */
+    private static double parseDoubleSafe(String raw) {
+        if (raw == null) return 0;
+        String cleaned = raw.replaceAll("[^0-9.]", "");
+        if (cleaned.isEmpty()) return 0;
+        try {
+            return Double.parseDouble(cleaned);
+        } catch (Exception e) {
+            return 0;
+        }
     }
 
     private static String parentLevel(String level) {
-        int lastDot = level.lastIndexOf(".");
-        return (lastDot == -1) ? "" : level.substring(0, lastDot);
+        int idx = level.lastIndexOf(".");
+        return (idx == -1) ? "" : level.substring(0, idx);
     }
 
     private static Operation.Department parseDept(String s) {
         if (s == null) return Operation.Department.NONE;
         return switch (s.trim().toUpperCase()) {
             case "ОГТ" -> Operation.Department.OGT;
-            case "УЗ" -> Operation.Department.UZ;
+            case "УЗ"  -> Operation.Department.UZ;
             case "ЦЕХ" -> Operation.Department.TSEH;
-            default -> Operation.Department.NONE;
+            default    -> Operation.Department.NONE;
         };
     }
 }

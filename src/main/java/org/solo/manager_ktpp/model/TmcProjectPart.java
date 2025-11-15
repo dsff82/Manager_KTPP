@@ -2,14 +2,19 @@ package org.solo.manager_ktpp.model;
 
 public class TmcProjectPart extends Part {
 
-    private Operation.OperationType consumedByOperation;
+    // какое OperationType потребляет этот TMC (ZAKUPKA или PROIZVODSTVO)
+    private Operation.OperationType consumedBy;
 
-    public TmcProjectPart(String name, Operation.OperationType consumedByOp) {
+    public TmcProjectPart(String name, Operation.OperationType consumedBy) {
         super(name, true);
-        this.consumedByOperation = consumedByOp;
+        this.consumedBy = consumedBy;
     }
 
-    public Operation.OperationType getConsumedByOperation() {
-        return consumedByOperation;
+    public Operation.OperationType getConsumedBy() {
+        return consumedBy;
+    }
+
+    public void setConsumedBy(Operation.OperationType consumedBy) {
+        this.consumedBy = consumedBy;
     }
 }
