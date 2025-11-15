@@ -11,6 +11,9 @@ public class TreeBuilder {
         return createPartNode(root);
     }
 
+    // ======================================================================
+    // PART NODE
+    // ======================================================================
     private static TreeItem<Object> createPartNode(Part part) {
 
         System.out.println("Часть: " + part.getName());
@@ -25,19 +28,25 @@ public class TreeBuilder {
 
         TreeItem<Object> item = new TreeItem<>(node, node.getIcon());
 
+        // Добавить процессы
         for (Process pr : part.getProcesses()) {
             item.getChildren().add(createProcessNode(pr, part));
         }
 
+        // Добавить дочерние части (кроме TMC)
         for (Part child : part.getChildren()) {
             if (!(child instanceof TmcProjectPart)) {
                 item.getChildren().add(createPartNode(child));
             }
         }
 
+        // TMC добавляется через операции, а не напрямую
         return item;
     }
 
+    // ======================================================================
+    // PROCESS NODE
+    // ======================================================================
     private static TreeItem<Object> createProcessNode(Process process, Part parentPart) {
 
         System.out.println("  Процесс: " + process.getName());
@@ -57,6 +66,9 @@ public class TreeBuilder {
         return item;
     }
 
+    // ======================================================================
+    // OPERATION NODE
+    // ======================================================================
     private static TreeItem<Object> createOperationNode(Operation op, Part parentPart) {
 
         System.out.println("    Операция: " + op.getType());
@@ -69,10 +81,9 @@ public class TreeBuilder {
 
         TreeItem<Object> item = new TreeItem<>(node, node.getIcon());
 
-        // вставляем TMC
+        // Вставляем TMC, которые привязаны к этой операции
         for (Part child : parentPart.getChildren()) {
             if (child instanceof TmcProjectPart tmc) {
-
                 if (tmc.getConsumedBy() == op.getType()) {
                     System.out.println("      → Добавляем ТМЦ: " + tmc.getName());
                     item.getChildren().add(createTmcNode(tmc));
@@ -83,6 +94,9 @@ public class TreeBuilder {
         return item;
     }
 
+    // ======================================================================
+    // TMC PART NODE
+    // ======================================================================
     private static TreeItem<Object> createTmcNode(TmcProjectPart tmc) {
 
         System.out.println("      TMC: " + tmc.getName());
@@ -102,6 +116,9 @@ public class TreeBuilder {
         return item;
     }
 
+    // ======================================================================
+    // TMC PROCESS NODE
+    // ======================================================================
     private static TreeItem<Object> createTmcProcessNode(Process process) {
 
         System.out.println("        TMC-process: " + process.getName());
@@ -121,6 +138,9 @@ public class TreeBuilder {
         return item;
     }
 
+    // ======================================================================
+    // TMC OPERATION NODE
+    // ======================================================================
     private static TreeItem<Object> createTmcOperationNode(Operation op) {
 
         System.out.println("          TMC-op: " + op.getType());
