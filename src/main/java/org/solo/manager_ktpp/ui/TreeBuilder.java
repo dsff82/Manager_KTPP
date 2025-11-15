@@ -7,10 +7,13 @@ import org.solo.manager_ktpp.model.Process;
 public class TreeBuilder {
 
     public static TreeItem<Object> buildTree(Part root) {
+        System.out.println("=== Построение дерева ===");
         return createPartNode(root);
     }
 
     private static TreeItem<Object> createPartNode(Part part) {
+
+        System.out.println("Часть: " + part.getName());
 
         HierarchyNode node = new HierarchyNode(
                 part.getName(),
@@ -22,12 +25,10 @@ public class TreeBuilder {
 
         TreeItem<Object> item = new TreeItem<>(node, node.getIcon());
 
-        // Добавить процессы
         for (Process pr : part.getProcesses()) {
             item.getChildren().add(createProcessNode(pr, part));
         }
 
-        // Добавить дочерние части (кроме TMC)
         for (Part child : part.getChildren()) {
             if (!(child instanceof TmcProjectPart)) {
                 item.getChildren().add(createPartNode(child));
@@ -38,6 +39,8 @@ public class TreeBuilder {
     }
 
     private static TreeItem<Object> createProcessNode(Process process, Part parentPart) {
+
+        System.out.println("  Процесс: " + process.getName());
 
         HierarchyNode node = new HierarchyNode(
                 process.getName(),
@@ -56,6 +59,8 @@ public class TreeBuilder {
 
     private static TreeItem<Object> createOperationNode(Operation op, Part parentPart) {
 
+        System.out.println("    Операция: " + op.getType());
+
         HierarchyNode node = new HierarchyNode(
                 op.getType().name() + " (" + op.getNormTime() + " ч)",
                 op,
@@ -64,15 +69,12 @@ public class TreeBuilder {
 
         TreeItem<Object> item = new TreeItem<>(node, node.getIcon());
 
-        // === ВСТАВЛЯЕМ TMC ПОД ОПЕРАЦИЮ ===
+        // вставляем TMC
         for (Part child : parentPart.getChildren()) {
-            if (child instanceof TmcProjectPart) {
+            if (child instanceof TmcProjectPart tmc) {
 
-                TmcProjectPart tmc = (TmcProjectPart) child;
-
-                // подходит ли этот TMC для текущей операции?
                 if (tmc.getConsumedBy() == op.getType()) {
-
+                    System.out.println("      → Добавляем ТМЦ: " + tmc.getName());
                     item.getChildren().add(createTmcNode(tmc));
                 }
             }
@@ -83,6 +85,8 @@ public class TreeBuilder {
 
     private static TreeItem<Object> createTmcNode(TmcProjectPart tmc) {
 
+        System.out.println("      TMC: " + tmc.getName());
+
         HierarchyNode node = new HierarchyNode(
                 tmc.getName(),
                 tmc,
@@ -91,7 +95,6 @@ public class TreeBuilder {
 
         TreeItem<Object> item = new TreeItem<>(node, node.getIcon());
 
-        // Добавить процессы TMC
         for (Process p : tmc.getProcesses()) {
             item.getChildren().add(createTmcProcessNode(p));
         }
@@ -100,6 +103,8 @@ public class TreeBuilder {
     }
 
     private static TreeItem<Object> createTmcProcessNode(Process process) {
+
+        System.out.println("        TMC-process: " + process.getName());
 
         HierarchyNode node = new HierarchyNode(
                 process.getName(),
@@ -117,6 +122,8 @@ public class TreeBuilder {
     }
 
     private static TreeItem<Object> createTmcOperationNode(Operation op) {
+
+        System.out.println("          TMC-op: " + op.getType());
 
         HierarchyNode node = new HierarchyNode(
                 op.getType().name() + " (" + op.getNormTime() + " ч)",
