@@ -14,9 +14,7 @@ public class ExcelParser {
 
     private static final List<String> LOG = new ArrayList<>();
 
-    public static List<String> getLog() {
-        return LOG;
-    }
+    public static List<String> getLog() { return LOG; }
 
     private static void log(String msg) {
         System.out.println(msg);
@@ -99,7 +97,7 @@ public class ExcelParser {
 
             // =================== ТМЦ-П ДЛЯ ОТДЕЛОВ ==========================
             if (hasKTPP) {
-                createTmcLogic(part, name, kdNorm, tdNorm, deptKD, prodNorm > 0);
+                createTmcLogicAttachToOperation(part, name, kdNorm, tdNorm, deptKD, prodNorm > 0);
             }
         }
 
@@ -117,17 +115,44 @@ public class ExcelParser {
         log("→ Покупная часть: " + name);
 
         Process zak = new Process("Зак " + name, Process.ProcessType.ZAK);
-        zak.addOperation(new Operation(
+        Operation zakOp = new Operation(
                 Operation.OperationType.ZAKUPKA,
                 buyNorm,
                 Operation.Department.UZ
-        ));
-
+        );
+        zak.addOperation(zakOp);
         part.addProcess(zak);
 
+        log("  Добавлен процесс Зак с операцией Zakupka(" + buyNorm + ")");
+
         if (hasKD || hasTD) {
-            createTmcLogic(part, name, kdNorm, tdNorm, deptKD, false);
-            log("  ТМЦ-П привязан к закупке");
+            // создаём TMC и привязываем **к самой операции Zakupka**
+            TmcProjectPart tmc = new TmcProjectPart("ТМЦ-П " + name);
+            Process tmcProc = new Process("ТМЦ-П " + name, Process.ProcessType.TMC_P);
+
+            if (hasKD) {
+                tmcProc.addOperation(new Operation(
+                        Operation.OperationType.KD,
+                        kdNorm,
+                        parseDept(deptKD)
+                ));
+                log("    KD: " + kdNorm);
+            }
+
+            if (hasTD) {
+                tmcProc.addOperation(new Operation(
+                        Operation.OperationType.TD,
+                        tdNorm,
+                        Operation.Department.OGT
+                ));
+                log("    TD: " + tdNorm);
+            }
+
+            tmc.addProcess(tmcProc);
+
+            // **Привязка**: zakOp потребляет tmc
+            zakOp.addConsumedPart(tmc);
+            log("  ТМЦ-П '" + tmc.getName() + "' привязан к операции Zakupka");
         }
     }
 
@@ -143,27 +168,34 @@ public class ExcelParser {
                     buyNorm,
                     Operation.Department.UZ
             ));
+            log("  ZAKUPKA: " + buyNorm);
         }
 
         if (prodNorm > 0) {
             ut.addOperation(new Operation(
                     Operation.OperationType.PROIZVODSTVO,
                     prodNorm,
-                    Operation.Department.TSEH // TODO: возможно из Excel
+                    Operation.Department.TSEH
             ));
+            log("  PROIZVODSTVO: " + prodNorm);
         }
 
         part.addProcess(ut);
     }
 
-    private static void createTmcLogic(Part part, String name,
-                                       double kdNorm, double tdNorm,
-                                       String deptKD,
-                                       boolean linkToProd) {
+    /**
+     * Создаёт ТМЦ и привязывает её к конкретной операции:
+     * если linkToProd == true — к операции PROIZVODSTVO, иначе — к ZAKUPKA.
+     * TMC не добавляется в part.children — теперь она хранится в Operation.consumedParts
+     */
+    private static void createTmcLogicAttachToOperation(Part part, String name,
+                                                        double kdNorm, double tdNorm,
+                                                        String deptKD,
+                                                        boolean linkToProd) {
 
         log("Создаём ТМЦ-П");
 
-        TmcProjectPart tmc = new TmcProjectPart("ТМЦ-П " + name, null);
+        TmcProjectPart tmc = new TmcProjectPart("ТМЦ-П " + name);
         Process tmcProc = new Process("ТМЦ-П " + name, Process.ProcessType.TMC_P);
 
         if (kdNorm > 0) {
@@ -172,6 +204,7 @@ public class ExcelParser {
                     kdNorm,
                     parseDept(deptKD)
             ));
+            log("  KD: " + kdNorm);
         }
 
         if (tdNorm > 0) {
@@ -180,17 +213,35 @@ public class ExcelParser {
                     tdNorm,
                     Operation.Department.OGT
             ));
+            log("  TD: " + tdNorm);
         }
 
         tmc.addProcess(tmcProc);
 
-        if (linkToProd) {
-            tmc.setConsumedBy(Operation.OperationType.PROIZVODSTVO);
-        } else {
-            tmc.setConsumedBy(Operation.OperationType.ZAKUPKA);
+        // находим операцию-потребитель в текущной части (если она была создана выше)
+        // сначала ищем PROIZVODSTVO в последнем добавленном процессе (УТ)
+        Operation consumer = null;
+
+        // ищем в процессах части (обычно последний добавленный — УТ)
+        List<Process> processes = part.getProcesses();
+        for (int i = processes.size() - 1; i >= 0; i--) {
+            Process pr = processes.get(i);
+            if (linkToProd) {
+                consumer = pr.findOperation(Operation.OperationType.PROIZVODSTVO);
+                if (consumer != null) break;
+            } else {
+                consumer = pr.findOperation(Operation.OperationType.ZAKUPKA);
+                if (consumer != null) break;
+            }
         }
 
-        part.addChild(tmc);
+        if (consumer != null) {
+            consumer.addConsumedPart(tmc);
+            log("  ТМЦ-П '" + tmc.getName() + "' привязан к операции " + consumer.getType());
+        } else {
+            // если операция не найдена — логим и оставляем TMC неподвязанной
+            log("  ВНИМАНИЕ: не найдена операция-потребитель для ТМЦ-П '" + tmc.getName() + "'");
+        }
     }
 
     // ======================= UTILS =======================================

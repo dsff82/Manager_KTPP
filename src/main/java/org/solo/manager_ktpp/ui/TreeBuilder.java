@@ -47,7 +47,28 @@ public class TreeBuilder {
                     op,
                     HierarchyNode.NodeType.OPERATION);
 
-            item.getChildren().add(treeItem(opNode));
+            TreeItem<Object> opItem = treeItem(opNode);
+
+            // Добавляем в дерево потребляемые TMC как дочерние узлы операции
+            for (TmcProjectPart tmc : op.getConsumedParts()) {
+                TreeItem<Object> tmcItem = buildTmcPart(tmc);
+                opItem.getChildren().add(tmcItem);
+            }
+
+            item.getChildren().add(opItem);
+        }
+
+        return item;
+    }
+
+    private static TreeItem<Object> buildTmcPart(TmcProjectPart tmc) {
+        HierarchyNode node = new HierarchyNode(tmc.getName(), tmc, HierarchyNode.NodeType.TMC_PART);
+        TreeItem<Object> item = treeItem(node);
+
+        // внутри ТМЦ показываем её процессы (КД/ТД)
+        for (Process pr : tmc.getProcesses()) {
+            TreeItem<Object> prItem = buildProcess(pr);
+            item.getChildren().add(prItem);
         }
 
         return item;

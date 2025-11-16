@@ -1,20 +1,26 @@
 package org.solo.manager_ktpp.model;
 
+/**
+ * ТМЦ-проект. Наследует Part, но хранит ссылку на операцию-потребителя.
+ */
 public class TmcProjectPart extends Part {
 
-    // какое OperationType потребляет этот TMC (ZAKUPKA или PROIZVODSTVO)
-    private Operation.OperationType consumedBy;
+    // Ссылка на реальную операцию, которая потребляет эту ТМЦ
+    private Operation consumerOperation;
 
-    public TmcProjectPart(String name, Operation.OperationType consumedBy) {
+    public TmcProjectPart(String name) {
         super(name, true);
-        this.consumedBy = consumedBy;
     }
 
-    public Operation.OperationType getConsumedBy() {
-        return consumedBy;
+    public Operation getConsumerOperation() {
+        return consumerOperation;
     }
 
-    public void setConsumedBy(Operation.OperationType consumedBy) {
-        this.consumedBy = consumedBy;
+    /**
+     * Привязка к операции — устанавливает ссылку, но не добавляет в operation.consumedParts,
+     * чтобы избежать рекурсивного дублирования; в коде парсера используем Operation.addConsumedPart(...)
+     */
+    public void setConsumerOperation(Operation consumerOperation) {
+        this.consumerOperation = consumerOperation;
     }
 }

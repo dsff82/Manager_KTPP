@@ -24,6 +24,16 @@ public class Process {
         operations.add(op);
     }
 
+    /**
+     * Найти первую операцию по типу
+     */
+    public Operation findOperation(Operation.OperationType t) {
+        for (Operation op : operations) {
+            if (op.getType() == t) return op;
+        }
+        return null;
+    }
+
     @Override
     public String toString() {
         return name + " (" + type + ")";

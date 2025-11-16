@@ -1,5 +1,9 @@
 package org.solo.manager_ktpp.model;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
 public class Operation {
 
     public enum Department { UZ, OGT, TSEH, NONE }
@@ -9,8 +13,8 @@ public class Operation {
     private double normTime;
     private Department department;
 
-    // Новое поле: для связки ТМЦ с операциями "что потребляется"
-    private String consumes; // строковое значение из Excel
+    // Список потребляемых TMC (двусторонняя связь)
+    private final List<TmcProjectPart> consumedParts = new ArrayList<>();
 
     public Operation(OperationType type, double normTime, Department department) {
         this.type = type;
@@ -22,9 +26,17 @@ public class Operation {
     public double getNormTime() { return normTime; }
     public Department getDept() { return department; }
 
-    public String getConsumes() { return consumes; }
-    public void setConsumes(String consumes) {
-        this.consumes = consumes;
+    // Работа с потребляемыми частями
+    public void addConsumedPart(TmcProjectPart p) {
+        if (p == null) return;
+        if (!consumedParts.contains(p)) {
+            consumedParts.add(p);
+            p.setConsumerOperation(this); // двусторонняя синхронизация
+        }
+    }
+
+    public List<TmcProjectPart> getConsumedParts() {
+        return Collections.unmodifiableList(consumedParts);
     }
 
     @Override

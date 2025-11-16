@@ -4,6 +4,8 @@ import javafx.beans.property.SimpleStringProperty;
 import org.solo.manager_ktpp.model.*;
 import org.solo.manager_ktpp.model.Process;
 
+import java.util.stream.Collectors;
+
 public class RowModel {
 
     private final SimpleStringProperty type;
@@ -24,7 +26,7 @@ public class RowModel {
     }
 
     /**
-     * Фабрика строк таблицы — адаптирована под новый ExcelParser.
+     * Фабрика строк таблицы — адаптирована под новую модель.
      */
     public static RowModel of(Object obj) {
 
@@ -51,23 +53,29 @@ public class RowModel {
         }
 
         if (obj instanceof Operation op) {
+            // собрать имена потребляемых TMC (если есть)
+            String consumedList = op.getConsumedParts().stream()
+                    .map(TmcProjectPart::getName)
+                    .collect(Collectors.joining(", "));
             return new RowModel(
                     "Operation",
                     op.getType().name(),
                     String.valueOf(op.getNormTime()),
                     op.getDept() == null ? "" : String.valueOf(op.getDept()),
-                    op.getConsumes() == null ? "" : op.getConsumes(), // Новое поле
+                    consumedList,
                     obj
             );
         }
 
         if (obj instanceof TmcProjectPart tmc) {
+            String consumer = tmc.getConsumerOperation() == null ? "" :
+                    tmc.getConsumerOperation().getType().name() + " (" + tmc.getConsumerOperation().getDept() + ")";
             return new RowModel(
                     "TMC",
                     tmc.getName(),
                     "",
                     "",
-                    "",   // consumedBy больше нет – теперь в Operation
+                    consumer,
                     obj
             );
         }

@@ -5,6 +5,9 @@ import javafx.scene.control.*;
 import javafx.stage.FileChooser;
 import org.solo.manager_ktpp.service.ExcelParser;
 import org.solo.manager_ktpp.model.Part;
+import org.solo.manager_ktpp.model.TmcProjectPart;
+import org.solo.manager_ktpp.model.Process;
+import org.solo.manager_ktpp.model.Operation;
 import org.solo.manager_ktpp.ui.RowModel;
 import org.solo.manager_ktpp.ui.TreeBuilder;
 
@@ -27,9 +30,6 @@ public class ExcelTreeController {
 
     private Part parsedRoot;
 
-    /* ============================================================
-                            ИНИЦИАЛИЗАЦИЯ UI
-       ============================================================ */
     @FXML
     public void initialize() {
 
@@ -50,15 +50,11 @@ public class ExcelTreeController {
         // Выбор дерева → выбор строки таблицы
         treeView.getSelectionModel().selectedItemProperty().addListener((obs, oldItem, newItem) -> {
             if (newItem == null) return;
-
             Object model = ((org.solo.manager_ktpp.model.HierarchyNode)newItem.getValue()).getValue();
             selectRowInTable(model);
         });
     }
 
-    /* ============================================================
-                            ОТКРЫТЬ EXCEL
-       ============================================================ */
     @FXML
     private void onOpenExcel() {
 
@@ -71,16 +67,13 @@ public class ExcelTreeController {
         welcomeText.setText("Загружается: " + file.getName());
 
         try {
-            // Парсим Excel → получаем объектную модель
-            parsedRoot = ExcelParser.parseExcel(file);//parse(file);
+            parsedRoot = ExcelParser.parseExcel(file);
 
-            // Строим дерево
             TreeItem<Object> rootNode = TreeBuilder.buildTree(parsedRoot);
             treeView.setRoot(rootNode);
             treeView.setShowRoot(true);
             expandAll(rootNode);
 
-            // Строим таблицу
             rebuildTable(parsedRoot);
 
             welcomeText.setText("Загружено: " + file.getName());
@@ -91,9 +84,6 @@ public class ExcelTreeController {
         }
     }
 
-    /* ============================================================
-                           ПОСТРОИТЬ ТАБЛИЦУ
-       ============================================================ */
     private void rebuildTable(Part root) {
         List<RowModel> list = new ArrayList<>();
         scanPart(root, list);
@@ -110,11 +100,25 @@ public class ExcelTreeController {
 
             for (var op : pr.getOperations()) {
                 out.add(RowModel.of(op));
+
+                // добавить потребляемые TMC (чтобы они были в таблице под операцией)
+                for (TmcProjectPart tmc : op.getConsumedParts()) {
+                    out.add(RowModel.of(tmc));
+
+                    // внутри ТМЦ показываем её процессы/операции (КД/ТД)
+                    for (var tpr : tmc.getProcesses()) {
+                        out.add(RowModel.of(tpr));
+                        for (var top : tpr.getOperations()) {
+                            out.add(RowModel.of(top));
+                        }
+                    }
+                }
             }
         }
 
         // Дети
         for (Part c : p.getChildren()) {
+            // дочерняя деталь как отдельный блок
             out.add(RowModel.of(c));
 
             for (var pr : c.getProcesses()) {
@@ -127,12 +131,8 @@ public class ExcelTreeController {
         }
     }
 
-    /* ============================================================
-                    ТАБЛИЦА → ВЫБОР В ДЕРЕВЕ
-       ============================================================ */
     private void selectNodeInTree(Object target) {
         expandAll(treeView.getRoot());
-
         TreeItem<Object> found = findNode(treeView.getRoot(), target);
         if (found != null) {
             treeView.getSelectionModel().select(found);
@@ -156,9 +156,6 @@ public class ExcelTreeController {
         return null;
     }
 
-    /* ============================================================
-                    ДЕРЕВО → ВЫБОР В ТАБЛИЦЕ
-       ============================================================ */
     private void selectRowInTable(Object model) {
         for (RowModel r : table.getItems()) {
             if (r.getModelObject() == model) {
@@ -169,9 +166,6 @@ public class ExcelTreeController {
         }
     }
 
-    /* ============================================================
-                           КНОПКИ РАСКРЫТИЯ
-       ============================================================ */
     @FXML
     private void onExpandAll() {
         expandAll(treeView.getRoot());
